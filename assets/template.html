@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>{{TITLE}}</title>
+<!--
+  paper-explainer 打印版书稿模板 · parchment 设计语言（单档·零基础版）
+  ─────────────────────────────────────────────────────────────
+  用法：复制本文件 -> 替换 {{...}} 占位 -> 按需增删章节 -> 交给 build_pdf.py 渲染
+
+  两条硬约定（build_pdf.py 依赖，勿改）：
+    1. 每章标题内必须有 &lt;span class="pmark"&gt;@@KEY@@&lt;/span&gt;，KEY 与目录 data-toc-key 一致
+    2. 目录页码处必须留空：&lt;span class="toc-pg" data-toc-key="KEY" data-toc-title="标题"&gt;&lt;/span&gt;
+    （上面两行故意用转义写法，否则 build_pdf.py 会把注释里的示例当成真的目录项）
+
+  设计语言（详见 references/aesthetic.md）：
+    · 羊皮纸底 #f5f4ed，绝不用纯白或冷灰
+    · 单一强调色墨蓝 #1B365D，占版面 ≤5%
+    · 全篇一种衬线体，正文 400、标题换中宋（真字重，不用合成粗体）
+    · 不用提示框、不用底色块、不用装饰线，靠段落与留白分层
+    · 全文唯一的强调结构是编号「因果链」
+-->
+<style>
+/* ═══════════ 设计令牌 ═══════════ */
+:root{
+  /* 表面：暖调，由亮到暗 */
+  --parchment:#f5f4ed;      /* 页面底色 */
+  --ivory:#faf9f5;          /* 极浅容器（仅表格斑马纹备用） */
+  --warm-sand:#e8e6dc;      /* 次级容器 */
+
+  /* 文字：四级，全部暖调（R≈G>B） */
+  --near-black:#141413;
+  --dark-warm:#3d3d3a;
+  --olive:#504e49;
+  --stone:#6b6a64;
+
+  /* 强调 */
+  --brand:#1B365D;
+  --brand-light:#2D5A8A;
+  --breaking-fg:#8b4513;    /* 仅用于「注意」二字的文字色，不做底色 */
+
+  /* 分隔线 */
+  --border:#e8e6dc;
+  --border-soft:#e5e3d8;
+
+  /* 字体：必须首选本机已装字体。
+     若写 Source Han Serif / Noto Serif CJK / 通用 serif 而本机未装，
+     Chrome 回退到内置 CJK 字体，ToUnicode 会把常用字映射成康熙部首
+     （用→⽤、目→⽬），PDF 看着正常但复制出来全是错字。 */
+  --serif:"STSong","SimSun","Songti SC",Georgia,serif;
+  --serif-med:"STZhongsong","STSong","SimSun","Songti SC",Georgia,serif;
+  --sans:var(--serif);      /* 单衬线原则：UI 小字也用衬线 */
+  --mono:"JetBrains Mono","Consolas","Courier New",monospace;
+
+  /* 纵向节奏 */
+  --rhythm-module:14pt;
+  --rhythm-section:18pt;
+}
+
+/* ═══════════ 页面 ═══════════ */
+@page{ size:A4; margin:20mm 22mm 22mm 22mm; }
+
+*{ box-sizing:border-box; margin:0; padding:0; }
+
+html{ background:var(--parchment); }   /* 根元素背景会铺满整个页面（含页边距） */
+body{
+  background:var(--parchment);
+  color:var(--near-black);
+  font-family:var(--serif);
+  font-size:10.5pt;
+  line-height:1.6;
+  letter-spacing:.3pt;                 /* 中文正文的舒适字距 */
+  -webkit-print-color-adjust:exact;
+  print-color-adjust:exact;
+  widows:3; orphans:3;
+}
+
+p{ margin:0 0 9pt; text-align:justify; text-justify:inter-ideograph; }
+p:last-child{ margin-bottom:0; }
+strong{ font-family:var(--serif-med); font-weight:400; color:var(--near-black); } /* 强调=换中宋，不用合成粗体 */
+a{ color:var(--brand); text-decoration:none; }
+sup{ font-size:.72em; }
+.small{ font-size:9pt; line-height:1.5; color:var(--stone); }
+
+/* ═══════════ 封面 ═══════════ */
+.cover{
+  min-height:246mm;
+  display:flex; flex-direction:column; justify-content:space-between;
+  padding-top:34mm;
+  page-break-after:always;
+}
+.cover-eyebrow{
+  font-size:9pt; font-weight:400; color:var(--brand);
+  letter-spacing:1.6pt; text-transform:uppercase;
+  margin-bottom:16pt;
+}
+.cover-title{
+  font-family:var(--serif-med);
+  font-size:34pt; font-weight:400; color:var(--near-black);
+  line-height:1.16; letter-spacing:.4pt;
+  margin-bottom:14pt;
+}
+.cover-sub{
+  font-size:13pt; color:var(--olive); line-height:1.55;
+  max-width:86%; margin-bottom:26pt;
+}
+.cover-meta{ font-size:10pt; color:var(--stone); line-height:1.75; }
+.cover-meta .k{ display:inline-block; width:19mm; color:var(--olive); }
+.cover-foot{ font-size:9pt; color:var(--stone); letter-spacing:.4pt; }
+
+/* ═══════════ 前言 ═══════════ */
+/* 前言只有一段导语加一张表，独占一页会留下大半页空白，因此与目录同页 */
+.front{ page-break-after:avoid; }
+.front-h{
+  font-family:var(--serif-med);
+  font-size:22pt; font-weight:400; line-height:1.2;
+  color:var(--near-black); margin-bottom:var(--rhythm-section);
+}
+.front table{ margin:10pt 0 0; }
+.front p{ margin-bottom:7pt; }
+
+/* ═══════════ 目录 ═══════════ */
+.toc{ page-break-after:always; }
+.toc-h{
+  font-family:var(--serif-med);
+  font-size:22pt; font-weight:400; line-height:1.2;
+  margin:34pt 0 var(--rhythm-section);
+}
+.toc-list{ list-style:none; }
+.toc-item{
+  display:flex; align-items:baseline; justify-content:space-between;
+  padding:6pt 0; font-size:11pt;
+  border-bottom:.3pt dotted var(--border);
+  page-break-inside:avoid;
+}
+.toc-item:last-of-type{ border-bottom:none; }
+.toc-label{ flex:1; color:var(--near-black); }
+.toc-item .dots{ display:none; }   /* 引导线由条目的下边框承担，不额外画点 */
+.toc-pg{
+  color:var(--brand); font-family:var(--serif-med);
+  min-width:24pt; text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+
+/* ═══════════ 章节 ═══════════ */
+.chapter{ page-break-before:always; }
+.ch-no{
+  font-family:var(--serif-med);
+  font-size:10pt; color:var(--brand);
+  letter-spacing:1.2pt; margin-bottom:10pt;
+  font-variant-numeric:tabular-nums;
+}
+.chapter h1{
+  font-family:var(--serif-med);
+  font-size:22pt; font-weight:400; line-height:1.2;
+  color:var(--near-black); letter-spacing:.3pt;
+  margin-bottom:10pt;
+}
+/* 导语：靠字号与颜色区分，不加左侧竖线 */
+.ch-lead{
+  font-size:11pt; line-height:1.6; color:var(--olive);
+  max-width:92%; margin-bottom:var(--rhythm-section);
+}
+
+h2{
+  font-family:var(--serif-med);
+  font-size:16pt; font-weight:400; line-height:1.25;
+  color:var(--near-black);
+  margin:24pt 0 10pt;                 /* 上 24 / 下 10：标题归属其下方内容 */
+  page-break-after:avoid;
+}
+h3{
+  font-family:var(--serif-med);
+  font-size:13pt; font-weight:400; line-height:1.3;
+  color:var(--near-black);
+  margin:16pt 0 6pt;
+  page-break-after:avoid;
+}
+h4{
+  font-family:var(--serif-med);
+  font-size:11pt; font-weight:400; color:var(--dark-warm);
+  margin:12pt 0 4pt; page-break-after:avoid;
+}
+
+/* ═══════════ 唯一的强调结构：编号因果链 ═══════════
+   无底色、无描边、无竖线。靠编号与缩进区分于正文。 */
+.chain{ margin:14pt 0; page-break-inside:avoid; }
+.chain-h{
+  font-family:var(--serif-med); font-size:9pt; color:var(--brand);
+  letter-spacing:.9pt; margin-bottom:6pt;
+}
+.chain ol{ list-style:none; padding-left:0; counter-reset:step; }
+.chain ol li{
+  position:relative; padding-left:17pt; margin-bottom:5pt; line-height:1.6;
+}
+.chain ol li::before{
+  counter-increment:step; content:counter(step);
+  position:absolute; left:0; top:0;
+  font-family:var(--serif-med); font-size:9pt; color:var(--brand);
+  font-variant-numeric:tabular-nums;
+}
+.chain ol li:last-child{ margin-bottom:0; }
+
+/* ═══════════ 「注意」段落：只有标签着色，不做底色块 ═══════════ */
+.flag{
+  font-size:9.5pt; line-height:1.6; color:var(--olive);
+  margin:9pt 0; page-break-inside:avoid;
+}
+.flag b{
+  font-family:var(--serif-med); font-weight:400;
+  color:var(--breaking-fg); margin-right:4pt;
+}
+
+/* ═══════════ 图 ═══════════ */
+.fig{ margin:14pt 0; text-align:center; page-break-inside:avoid; }
+.fig svg{ max-width:100%; height:auto; }
+/* SVG 文字同样会踩字体回退的坑，用 CSS 强制覆盖 presentation 属性 */
+.fig svg text{ font-family:var(--serif); }
+.fig-cap{
+  font-size:9pt; line-height:1.5; color:var(--stone);
+  margin-top:6pt; text-align:center;
+}
+.fig-cap b{ font-family:var(--serif-med); font-weight:400; color:var(--dark-warm); }
+
+/* ═══════════ 表格：只用细分隔线，无底色表头、无竖线、无外框 ═══════════ */
+table{
+  width:100%; border-collapse:collapse;
+  font-size:9.5pt; line-height:1.5;
+  margin:12pt 0; page-break-inside:avoid;
+}
+thead{ display:table-header-group; }
+th{
+  text-align:left; font-family:var(--serif-med); font-weight:400;
+  color:var(--dark-warm);
+  padding:6pt 8pt; border-bottom:.6pt solid var(--border);
+}
+td{
+  padding:5pt 8pt; border-bottom:.25pt solid var(--border);
+  vertical-align:top;
+}
+tbody tr:last-child td{ border-bottom:.6pt solid var(--border); }
+table.c td, table.c th{ text-align:center; }
+table.compact{ font-size:8.5pt; }
+table.compact th{ padding:4pt 6pt; }
+table.compact td{ padding:3pt 6pt; }
+table.financial td:not(:first-child){ text-align:right; font-variant-numeric:tabular-nums; }
+table .total td{ font-family:var(--serif-med); border-top:.6pt solid var(--border); }
+.cap{ font-size:9pt; color:var(--stone); margin:-6pt 0 10pt; }
+
+/* ═══════════ 术语条目：一词一条，两字段 ═══════════ */
+.term{
+  padding:11pt 0; border-bottom:.25pt solid var(--border);
+  page-break-inside:avoid;
+}
+.term:last-of-type{ border-bottom:none; }
+.term-h{
+  font-family:var(--serif-med); font-size:12pt; color:var(--near-black);
+  margin-bottom:5pt;
+}
+.term-h .en{ font-size:9pt; color:var(--stone); margin-left:6pt; letter-spacing:0; }
+.term .row{ display:flex; font-size:9.5pt; line-height:1.6; margin-bottom:3pt; }
+.term .row:last-child{ margin-bottom:0; }
+.term dt{
+  flex:0 0 18mm; font-size:9pt; color:var(--brand); letter-spacing:.5pt;
+  padding-top:.4pt;
+}
+.term dd{ flex:1; min-width:0; margin:0; }
+
+/* ═══════════ 其他 ═══════════ */
+.quote{
+  font-size:10pt; line-height:1.6; color:var(--olive);
+  margin:12pt 16pt; padding:4pt 0;
+}
+.rule{ border:0; border-top:.6pt solid var(--border); margin:18pt 0; }
+.pmark{ font-size:.5pt; color:#f5f4ed; letter-spacing:0; }  /* 与页面底色同色，肉眼不可见 */
+.nobreak{ page-break-inside:avoid; }
+.newpage{ page-break-before:always; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ 封面 ═══════════ -->
+<section class="cover">
+  <div>
+    <div class="cover-eyebrow">Paper Explainer</div>
+    <h1 class="cover-title">{{TITLE}}</h1>
+    <div class="cover-sub">{{SUBTITLE}}</div>
+  </div>
+  <div>
+    <div class="cover-meta">
+      <div><span class="k">研究方向</span>{{DIRECTION}}</div>
+      <div><span class="k">论文数量</span>{{N}} 篇</div>
+      <div><span class="k">读者定位</span>零基础，无需专业背景</div>
+      <div><span class="k">生成日期</span>{{DATE}}</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 前言 ═══════════ -->
+<section class="front">
+  <h2 class="front-h">怎么用这本册子</h2>
+
+  <p>这本册子不是论文摘要的合集，而是把你提供的这批论文按<strong>“先懂方向、再懂词、再懂论文”</strong>的顺序重排了一遍。五个部分对应五种读法，建议按顺序走，不要跳。</p>
+
+  <table class="compact">
+  <thead><tr><th style="width:16%">部分</th><th style="width:30%">回答什么问题</th><th>读完之后你应该能</th></tr></thead>
+  <tbody>
+    <tr><td>第一部分</td><td>这个方向在干什么</td><td>用一句话向别人解释这批论文为什么值得做</td></tr>
+    <tr><td>第二部分</td><td>这些词是什么意思</td><td>看懂论文标题和摘要里的每个术语</td></tr>
+    <tr><td>第三部分</td><td>该按什么顺序读</td><td>自己安排阅读计划，知道哪些要精读</td></tr>
+    <tr><td>第四部分</td><td>每篇论文讲了什么</td><td>说清每篇的问题、做法、代价、与前后关系</td></tr>
+    <tr><td>第五部分</td><td>整批论文连成什么故事</td><td>画出技术演进线，说清每一步为什么只能这样走</td></tr>
+  </tbody>
+  </table>
+</section>
+
+<!-- ═══════════ 目录 ═══════════ -->
+<section class="toc">
+  <h2 class="toc-h">目　录</h2>
+  <ul class="toc-list">
+    <li class="toc-item"><span class="toc-label">第一部分　这个方向在干什么</span><span class="toc-pg" data-toc-key="P1" data-toc-title="第一部分　这个方向在干什么"></span></li>
+    <li class="toc-item"><span class="toc-label">第二部分　重要术语解释清单</span><span class="toc-pg" data-toc-key="P2" data-toc-title="第二部分　重要术语解释清单"></span></li>
+    <li class="toc-item"><span class="toc-label">第三部分　论文阅读顺序与理由</span><span class="toc-pg" data-toc-key="P3" data-toc-title="第三部分　论文阅读顺序与理由"></span></li>
+    <li class="toc-item"><span class="toc-label">第四部分　逐篇精读引导</span><span class="toc-pg" data-toc-key="P4" data-toc-title="第四部分　逐篇精读引导"></span></li>
+    <li class="toc-item"><span class="toc-label">第五部分　总结</span><span class="toc-pg" data-toc-key="P5" data-toc-title="第五部分　总结"></span></li>
+    <li class="toc-item"><span class="toc-label">附录 A　横向对比表</span><span class="toc-pg" data-toc-key="A1" data-toc-title="附录 A　横向对比表"></span></li>
+    <li class="toc-item"><span class="toc-label">附录 B　论文索引</span><span class="toc-pg" data-toc-key="A2" data-toc-title="附录 B　论文索引"></span></li>
+  </ul>
+</section>
+
+<!-- ═══════════ 第一部分 ═══════════ -->
+<section class="chapter">
+  <div class="ch-no">第一部分</div>
+  <h1>这个方向在干什么<span class="pmark">@@P1@@</span></h1>
+  <div class="ch-lead">
+    <p>{{一句话点明这批论文共同的战场，以及为什么它值得解决。}}</p>
+  </div>
+
+  <h2>1.1 研究的对象</h2>
+  <p>{{用零基础能懂的话说明研究对象是什么、在系统里承担什么功能。首次出现的术语必须就地用一句话解释。}}</p>
+  <p>{{再补一句规范定义：<strong>{{术语}}</strong>是指……。这一句用百科式的写法，客观、定义先行，不夹带个人判断。}}</p>
+
+  <h2>1.2 不解决会怎样</h2>
+  <p>{{把“后果”量化：损耗多几 dB、容差差几倍、成本差一个数量级、系统指标被卡在哪。给数量级，不给形容词。}}</p>
+
+  <h2>1.3 一个类比</h2>
+  <p>打个比方：{{生活化类比，一段话说完，不超过四句}}。</p>
+  <p class="small">这个类比只在“{{成立的方面}}”上成立。它不能外推到 {{不成立的方面}}——{{一句话说明为什么}}。</p>
+
+  <div class="chain">
+    <div class="chain-h">因果链</div>
+    <ol>
+      <li>{{起点约束：什么物理限制导致必须解决这个问题}}</li>
+      <li>{{所以只能走哪条技术路线}}</li>
+      <li>{{该路线要付出的代价}}</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ═══════════ 第二部分 ═══════════ -->
+<section class="chapter">
+  <div class="ch-no">第二部分</div>
+  <h1>重要术语解释清单<span class="pmark">@@P2@@</span></h1>
+  <div class="ch-lead">
+    <p>按“读论文时会遇到的先后顺序”排列，不按字母序。一个词条只讲一个词，每条两个字段：概念、应用场景。</p>
+  </div>
+
+  <!-- 术语条目：复制此块。标题只写一个术语，不要把两个词并成一条 -->
+  <div class="term">
+    <div class="term-h">{{术语中文名}}<span class="en">{{English Term, ABBR}}</span></div>
+    <div class="row"><dt>概　念</dt><dd>{{百科式的通行定义：先说它是什么，再说它由什么决定。客观、定义先行，不加“我认为”。}}</dd></div>
+    <div class="row"><dt>应用场景</dt><dd>{{它在什么场合被使用、用来衡量或解决什么；在论文里出现在哪一步。}}</dd></div>
+  </div>
+
+  <p class="flag"><b>注意</b>{{若这个词常与另一个词混淆，在这里用一句话说明区别，但两者仍各自独立成条，不要合并}}。</p>
+</section>
+
+<!-- ═══════════ 第三部分 ═══════════ -->
+<section class="chapter">
+  <div class="ch-no">第三部分</div>
+  <h1>论文阅读顺序与理由<span class="pmark">@@P3@@</span></h1>
+  <div class="ch-lead">
+    <p>排序原则：先单层后多层，先实测后仿真，先简单机制后复杂机制。每篇一句话说明为什么排在这个位置。</p>
+  </div>
+
+  <table>
+  <thead><tr><th style="width:8%">序</th><th style="width:26%">论文</th><th style="width:12%">精读/泛读</th><th>排序理由</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>{{作者年份}}</td><td>精读</td><td>{{奠基工作／最易懂／数据最全}}</td></tr>
+    <tr><td>2</td><td>{{作者年份}}</td><td>精读</td><td>{{是上一篇的改进／换了机制}}</td></tr>
+  </tbody>
+  </table>
+
+  <h3>为什么这样排</h3>
+  <p>{{解释排序背后的认知逻辑：为什么先读 A 再读 B 会更省力，而不是简单罗列。}}</p>
+</section>
+
+<!-- ═══════════ 第四部分 ═══════════ -->
+<section class="chapter">
+  <div class="ch-no">第四部分</div>
+  <h1>逐篇精读引导<span class="pmark">@@P4@@</span></h1>
+  <div class="ch-lead">
+    <p>按第三部分的顺序，每篇五个问题：它回答什么、前人卡在哪、它怎么做、结果与代价、与前面的关系。</p>
+  </div>
+
+  <!-- ── 单篇模板：复制此块 ── -->
+  <h2>4.1　{{作者年份}}｜{{论文标题}}</h2>
+  <p class="small">{{期刊 · 年份 · 数据性质：实测／纯仿真}}</p>
+
+  <h3>它回答的问题</h3>
+  <p>{{一句话。必须具体到物理量或工艺限制，不写“提高效率”。}}</p>
+
+  <h3>前人卡在哪里</h3>
+  <p>{{这篇出现之前，该问题的困境是什么。要具体到“卡在哪个物理限制或工艺限制”，不要写“效率不够高”这种空话。}}</p>
+
+  <h3>它的关键做法</h3>
+  <table class="compact">
+  <thead><tr><th style="width:14%">环节</th><th>内容</th></tr></thead>
+  <tbody>
+    <tr><td>输入</td><td>{{光从哪里来、模场多大、什么条件}}</td></tr>
+    <tr><td>处理</td><td>{{结构做了什么，靠什么物理机制起作用}}</td></tr>
+    <tr><td>输出</td><td>{{变成什么，代价是什么}}</td></tr>
+  </tbody>
+  </table>
+
+  <div class="fig">
+    <!-- 内嵌 SVG 示意图：器件剖面／光路分段／模场收缩／技术路线
+         配色只用令牌：描边 #1B365D，填充 #eef2f7 / #faf9f5，文字 #3d3d3a，轴线 #e8e6dc -->
+    <svg viewBox="0 0 680 190" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="680" height="190" fill="#f5f4ed"/>
+      <rect x="46" y="62" width="588" height="52" fill="#eef2f7" stroke="#1B365D" stroke-width="0.9"/>
+      <text x="340" y="94" font-size="12" fill="#3d3d3a" text-anchor="middle">在此绘制器件结构／光路／模场演化</text>
+      <line x1="46" y1="136" x2="634" y2="136" stroke="#e8e6dc" stroke-width="0.6"/>
+      <text x="340" y="156" font-size="10" fill="#6b6a64" text-anchor="middle">坐标、单位、箭头方向必须与正文一致</text>
+    </svg>
+    <div class="fig-cap"><b>图 4-1</b>　{{图题}}。{{一句话说明这张图要证明什么}}</div>
+  </div>
+
+  <h3>结果与代价</h3>
+  <p>{{效果提升了什么（带口径、带条件），牺牲了什么（尺寸、工艺、带宽、偏振、容差）。}}</p>
+
+  <p class="flag"><b>注意</b>{{该文的损耗是怎么算的：含不含菲涅尔反射、单端还是双端、扣没扣波导、配什么光纤。不写清就不能与别篇比较}}。</p>
+
+  <h3>与前面论文的关系</h3>
+  <p>{{改进了谁、留下了什么坑。若无直接继承关系，写“技术路线相似”而非“继承了”。}}</p>
+
+  <div class="chain">
+    <div class="chain-h">因果链</div>
+    <ol>
+      <li>{{起点：什么约束导致必须解决这个问题}}</li>
+      <li>{{所以只能选某种机制}}</li>
+      <li>{{该机制要求什么结构}}</li>
+      <li>{{该结构要付出什么代价}}</li>
+    </ol>
+  </div>
+  <!-- ── 单篇模板结束 ── -->
+</section>
+
+<!-- ═══════════ 第五部分 ═══════════ -->
+<section class="chapter">
+  <div class="ch-no">第五部分</div>
+  <h1>总结<span class="pmark">@@P5@@</span></h1>
+  <div class="ch-lead">
+    <p>把这批论文串成一条线：问题如何被一步步推进，哪一步是真正的转折。</p>
+  </div>
+
+  <h2>5.1 故事线</h2>
+  <p>{{一段话，不要分点。要求：起点是一个物理约束，终点是仍未解决的问题，中间每一环都能说出“因为……所以……”。}}</p>
+
+  <div class="chain">
+    <div class="chain-h">因果链</div>
+    <ol>
+      <li>{{整批论文共同面对的物理约束是什么}}</li>
+      <li>{{第一条路线为什么成立，又为什么不够}}</li>
+      <li>{{后续路线各自换掉了哪一个自由度}}</li>
+      <li>{{到这一批为止，仍然没有解决的是什么}}</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ═══════════ 附录 A ═══════════ -->
+<section class="chapter">
+  <div class="ch-no">附录 A</div>
+  <h1>横向对比表<span class="pmark">@@A1@@</span></h1>
+  <div class="ch-lead">
+    <p>只列论文实际报告的数据。未报告的写“论文未报告”，不估算、不补齐、不跨口径比较。</p>
+  </div>
+
+  <table class="compact">
+  <thead><tr>
+    <th style="width:11%">论文</th><th style="width:10%">结构路线</th><th style="width:11%">核心指标</th>
+    <th style="width:8%">波长</th><th style="width:9%">容差</th><th style="width:9%">数据性质</th><th>主要缺口</th>
+  </tr></thead>
+  <tbody>
+    <tr><td>{{代号}}</td><td>{{路线}}</td><td>{{数值+口径}}</td><td>{{nm}}</td><td>{{±x μm}}</td><td><strong>实测</strong></td><td>{{缺口}}</td></tr>
+  </tbody>
+  </table>
+</section>
+
+<!-- ═══════════ 附录 B ═══════════ -->
+<section class="chapter">
+  <div class="ch-no">附录 B</div>
+  <h1>论文索引<span class="pmark">@@A2@@</span></h1>
+  <div class="ch-lead">
+    <p>题录信息以原文为准。原文缺失的字段如实标注，不凭文件名推断。</p>
+  </div>
+
+  <table class="compact">
+  <thead><tr><th style="width:6%">序</th><th style="width:40%">题名</th><th style="width:16%">第一作者</th><th style="width:22%">期刊/会议</th><th>年份</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>{{标题}}</td><td>{{作者}}</td><td>{{期刊 卷(期):页}}</td><td>{{年}}</td></tr>
+  </tbody>
+  </table>
+</section>
+
+</body>
+</html>
